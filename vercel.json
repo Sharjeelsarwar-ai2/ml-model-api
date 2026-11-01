@@ -1,0 +1,1 @@
+{"buildCommand":"pip install -r requirements.txt && python train.py","rewrites":[{"destination":"/api/index.py","source":"/(.*)"}]}

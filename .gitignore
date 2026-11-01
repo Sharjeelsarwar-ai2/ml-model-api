@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+model/
+data/
+shots/
+*.pdf
