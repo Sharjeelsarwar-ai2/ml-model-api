@@ -193,12 +193,13 @@ story.append(Paragraph(
 story.append(data_table(
     ["Endpoint", "What it does", "Example"],
     [
-        ["GET /", "Project info, model, endpoints", "Returns name, dataset, test accuracy"],
+        ["GET /", "Redirects to /demo", "Bare URL opens the demo page (307)"],
         ["GET /health", "Health check", '{ "status": "ok", "model_loaded": true }'],
         ["POST /predict", "Classify one sentence", '{ "label": "positive", "score": 0.896 }'],
         ["POST /predict/batch", "Classify up to 100 texts", "Returns a list of predictions"],
-        ["GET /demo", "In-browser demo page", "Type a sentence, get a result card"],
-        ["GET /face", "Face emotion detection page", "Camera or photo, 7 expressions, in-browser"],
+        ["GET /demo", "Demo page: Text sentiment + Face emotion tabs", "One page, two tools; tabs in the URL hash"],
+        ["GET /demo#face", "Face emotion tab (direct link)", "Opens the face tab on load"],
+        ["GET /face", "Redirects to /demo#face", "Old face link kept working (307)"],
         ["GET /docs", "Interactive API docs", "FastAPI's built-in Swagger UI"],
     ]))
 story.append(Spacer(1, 2 * mm))
@@ -206,21 +207,32 @@ story.append(Paragraph(
     "The <b>score</b> is the model's probability for the predicted label (0–1, rounded to 4 decimals). "
     "So a positive prediction with score 0.896 means the model is 89.6% confident it is positive.", S_BODY))
 
-story.append(Paragraph("Step 6 — The /demo page", S_H2))
+story.append(Paragraph("Step 6 — The /demo page: two tools, one page", S_H2))
 story.append(Paragraph(
-    "A polished, self-contained demo page with this project's own fresh identity — soft blush "
-    "background (#FDF2F5), deep rose / magenta accents (#D6336C / #E91E63), dark ink text, white "
-    "cards with soft shadows and rounded corners. It has a large textarea, an “Analyze sentiment” "
-    "button, three clickable example sentences (clearly positive, clearly negative, mixed), a result "
-    "card showing the label as a coloured pill plus a confidence meter, a loading state "
-    "(“Analyzing…”) while the request runs, and a graceful inline error message if the API fails. "
-    "Verified visually at desktop 1280px and mobile 390px — no overflow, no overlapping text, "
-    "0 console errors.", S_BODY))
+    "The demo is now <b>one page with two tabs</b> — <b>Text sentiment</b> and <b>Face emotion</b> — "
+    "in the same fresh identity: soft blush background (#FDF2F5), deep rose / magenta accents "
+    "(#D6336C / #E91E63), dark ink text, white cards with soft shadows and rounded corners. "
+    "The tab state lives in the URL hash, so each tool is directly linkable: "
+    "<font face='Courier' size='10'>/demo#text</font> and <font face='Courier' size='10'>/demo#face</font>. "
+    "The old <font face='Courier' size='10'>GET /face</font> address still works — it redirects (307) to "
+    "<font face='Courier' size='10'>/demo#face</font>.", S_BODY))
+story.append(Paragraph(
+    "<b>Text tab</b> — unchanged from before: a large textarea, an “Analyze sentiment” button, three "
+    "clickable example sentences (clearly positive, clearly negative, mixed), a result card showing the "
+    "label as a coloured pill plus a confidence meter, a plain-words feeling line (“Happy — this sounds "
+    "genuinely pleased…”, “Hurting — this sounds clearly upset…”), the raw POST /predict call, a loading "
+    "state (“Analyzing…”) while the request runs, and a graceful inline error message if the API fails.", S_BODY))
+story.append(Paragraph(
+    "<b>Face tab</b> — the camera / photo-upload face emotion tool (see Step 9). The face-api.js library "
+    "loads deferred, so the text tab works instantly even if the CDN is slow, and the face models load "
+    "only the first time the Face tab is opened (lazy init, with a “Loading face models…” state). "
+    "Switching back to the text tab stops a running camera. Verified visually at desktop 1280px and "
+    "mobile 390px — no overflow, no overlapping text, 0 console errors.", S_BODY))
 
 story.append(Paragraph("Step 7 — Local testing (verified)", S_H2))
 story.append(Paragraph(
     "Server started with <font face='Courier' size='10'>uvicorn app:app --port 8000</font>; "
-    "<font face='Courier' size='10'>test_api.py</font> runs 8 checks — <b>8/8 passed, 0 errors</b>. "
+    "<font face='Courier' size='10'>test_api.py</font> runs 9 checks — <b>9/9 passed, 0 errors</b>. "
     "The exact curl checks and their real outputs:", S_BODY))
 story.append(code_block([
     "$ curl http://127.0.0.1:8000/health",
@@ -242,6 +254,9 @@ story.append(code_block([
     '{"detail":"text must not be empty"}   (HTTP 400)',
     "",
     "$ curl -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/demo   ->  200",
+    "",
+    "$ curl -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/face   ->  307 to /demo#face",
+    "$ curl -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/      ->  307 to /demo",
 ]))
 story.append(Spacer(1, 2 * mm))
 story.append(Paragraph(
@@ -272,16 +287,19 @@ story.append(Paragraph(
     "so every request is fast. Vercel is serverless — cold starts reload the model (small at 0.23 MB, "
     "about a second) — but it keeps everything in one place he already uses.", S_BODY))
 
-story.append(Paragraph("Step 9 — Face emotion detection (GET /face)", S_H1))
+story.append(Paragraph("Step 9 — Face emotion detection (the Face tab)", S_H1))
 story.append(Paragraph(
-    "<b>What was added.</b> A second demo page, <font face='Courier' size='10'>GET /face</font>, in the same "
-    "app and the same pink/rose identity as <font face='Courier' size='10'>/demo</font>. It reads facial "
-    "expressions two ways: a <b>live camera</b> (Start/Stop buttons, front camera via "
-    "<font face='Courier' size='10'>getUserMedia</font> with <font face='Courier' size='10'>facingMode: \"user\"</font>, "
-    "face box + top-expression label drawn live on a canvas overlay) and a <b>photo upload</b> (pick a photo "
-    "from the gallery, same detection on the still image). The result shows the top emotion big with its "
-    "emoji and a confidence bar, plus all 7 expression scores listed underneath. The two demo pages link "
-    "to each other (“Try face emotion &rarr;” / “&larr; Back to text demo”).", S_BODY))
+    "<b>What was added — and then merged.</b> Face emotion detection first shipped as a second demo "
+    "page, <font face='Courier' size='10'>GET /face</font>, and was then merged into the demo page as "
+    "its second tab, so both tools now live at <font face='Courier' size='10'>GET /demo</font> under one "
+    "link. The tab is <b>Face emotion</b> (direct link <font face='Courier' size='10'>/demo#face</font>); "
+    "the old <font face='Courier' size='10'>/face</font> address redirects there (307), so any link or "
+    "bookmark to it still lands on the face tool. It reads facial expressions two ways: a <b>live camera</b> "
+    "(Start/Stop buttons, front camera via <font face='Courier' size='10'>getUserMedia</font> with "
+    "<font face='Courier' size='10'>facingMode: \"user\"</font>, face box + top-expression label drawn live "
+    "on a canvas overlay) and a <b>photo upload</b> (pick a photo from the gallery, same detection on the "
+    "still image). The result shows the top emotion big with its emoji and a confidence bar, plus all 7 "
+    "expression scores listed underneath.", S_BODY))
 story.append(Paragraph(
     "<b>How it works.</b> Detection runs <b>100% in the browser</b> with "
     "<font face='Courier' size='10'>face-api.js</font> — the maintained fork "
@@ -310,6 +328,15 @@ story.append(data_table(
     ]))
 story.append(Spacer(1, 2 * mm))
 story.append(Paragraph(
+    "<b>Loading, lazily.</b> The face-api.js library tag is deferred, so the text tab works instantly "
+    "even on a slow connection. The three models load only the first time the Face tab is opened, with a "
+    "“Loading face models…” state while they download. One real bug was caught by testing: on a direct "
+    "<font face='Courier' size='10'>/demo#face</font> visit, the tab code ran before the deferred library "
+    "had arrived, so the first version gave up with a load error instead of waiting. The fix: the face "
+    "initialiser now waits up to 15 seconds for the library to appear before reporting a failure — "
+    "verified by loading <font face='Courier' size='10'>/demo#face</font> directly in a headless browser. "
+    "Switching back to the text tab stops a running camera.", S_BODY))
+story.append(Paragraph(
     "<b>Why it runs in the browser.</b> The Render free server cannot run a face model — it is a small "
     "Python service with no GPU and no camera. Doing detection client-side also means <b>camera frames "
     "and photos never leave the user's device</b>: nothing is uploaded, nothing is sent to the server, "
@@ -326,19 +353,22 @@ story.append(Paragraph(
     "words, exactly like the feeling line on the text demo. A smile scores as happy; a frown or tears "
     "score as sad. The expressions are a reading of the face, not a diagnosis of how someone feels.", S_BODY))
 story.append(Paragraph(
-    "<b>What was verified (and what was not).</b> <font face='Courier' size='10'>GET /face</font> returns 200 locally; "
-    "the library script, all three model manifests and all three model weight files return HTTP 200 "
-    "(checked with curl). Detection was run end-to-end in a headless browser on a real public-domain "
-    "smiling portrait (Wikimedia Commons): top emotion <b>Happy, score 1.00</b>, all 7 scores listed, face "
-    "box + landmarks drawn on the overlay (verified geometrically: the canvas exactly matches the displayed "
-    "photo size, box inside the bounds). Layout is clean at desktop 1280px and mobile 390px (0 px horizontal "
-    "overflow), 0 console errors. The camera-denied path was exercised and shows its message correctly. "
-    "<b>Not verified:</b> the live camera on a real phone — headless Firefox has no camera, so that path "
-    "still needs a real-phone check. Also note: the sandbox's headless Firefox could not fetch jsDelivr "
-    "directly (its requests hang), so the in-browser detection test used byte-identical local copies of the "
-    "same pinned files; the shipped page still loads everything from the CDN, where every URL was verified "
-    "HTTP 200. On the headless test machine TensorFlow.js fell back to the CPU backend (no WebGL there); "
-    "on a real phone it will use WebGL.", S_BODY))
+    "<b>What was verified (and what was not).</b> <font face='Courier' size='10'>test_api.py</font> runs 9 checks — "
+    "<b>9/9 passed</b>, including <font face='Courier' size='10'>GET /face</font> → 307 to "
+    "<font face='Courier' size='10'>/demo#face</font> and <font face='Courier' size='10'>GET /</font> → 307 to "
+    "<font face='Courier' size='10'>/demo</font>. In a headless browser, the merged page loads with both tabs; "
+    "Text sentiment is the default and the face models do <b>not</b> load until the Face tab is opened; the text "
+    "tab ran end-to-end (positive sentence → Positive, 0.90, feeling line shown); the face tab loaded its models "
+    "lazily and detected the same smiling portrait as <b>Happy, score 1.00</b>, all 7 scores listed; a direct "
+    "<font face='Courier' size='10'>/demo#face</font> load opens the face tab and loads the models; switching tabs "
+    "updates the hash both ways; the camera-denied path shows its message gracefully; layout is clean at desktop "
+    "1280px and mobile 390px (0 px horizontal overflow on both tabs), 0 console errors. <b>Not verified:</b> the "
+    "live camera on a real phone — headless Firefox has no camera, so that path still needs a real-phone check. "
+    "Also note: the sandbox's headless Firefox could not fetch jsDelivr directly (its requests hang), so the "
+    "in-browser detection tests used byte-identical local copies of the same pinned files, served through request "
+    "interception; the shipped page still loads everything from the CDN, where every URL was verified HTTP 200. "
+    "On the headless test machine TensorFlow.js fell back to the CPU backend (no WebGL there); on a real phone "
+    "it will use WebGL.", S_BODY))
 
 # ---- How to run + file list ----
 story.append(Paragraph("How to run it locally", S_H1))
@@ -346,7 +376,7 @@ story.append(code_block([
     "pip install -r requirements.txt",
     "python train.py          # trains the model, saves model/sentiment_model.joblib",
     "uvicorn app:app --reload # API at http://127.0.0.1:8000",
-    "python test_api.py       # 8 smoke tests against the running server",
+    "python test_api.py       # 9 smoke tests against the running server",
 ]))
 story.append(Spacer(1, 4 * mm))
 story.append(Paragraph("File list", S_H1))
@@ -354,14 +384,15 @@ story.append(data_table(
     ["File", "What it is", "Size / notes"],
     [
         ["train.py", "Trains TF-IDF + LogisticRegression", "Downloads UCI data, prints accuracy"],
-        ["app.py", "FastAPI app + /demo and /face pages", "7 endpoints incl. /face, loads model once"],
+        ["app.py", "FastAPI app + merged /demo page (text + face tabs)", "7 endpoints; /face redirects to /demo#face"],
         ["api/index.py", "Vercel entrypoint (Mangum wrapper)", "No change to app.py needed"],
         ["vercel.json", "Routes all paths to /api/index.py", "Vercel only"],
         ["requirements.txt", "fastapi, uvicorn, scikit-learn, joblib, pydantic, mangum", "Pinned versions"],
-        ["test_api.py", "8 smoke tests (health, predict, batch, demo)", "8/8 passed"],
+        ["test_api.py", "9 smoke tests (health, predict, batch, demo, redirects)", "9/9 passed"],
         ["README.md", "Setup, curl examples, Render + Vercel deploys", "—"],
-        ["shots/face-desktop.png", "GET /face verified at 1280px", "Happy 1.00, box on face"],
-        ["shots/face-mobile.png", "GET /face verified at 390px", "0 px overflow"],
+        ["shots/merged-desktop.png", "Merged /demo, text tab, at 1280px", "Positive 0.90, feeling line shown"],
+        ["shots/merged-face-desktop.png", "Merged /demo, face tab, at 1280px", "Happy 1.00, box on face"],
+        ["shots/merged-mobile.png", "Merged /demo at 390px", "0 px overflow, both tabs"],
         ["model/sentiment_model.joblib", "Trained vectorizer + model", "0.23 MB"],
         ["data/sentiment_labelled_sentences.zip", "UCI dataset (downloaded by train.py)", "~85 KB"],
         ["ML_Model_API_Build_Report.pdf", "This report", "—"],

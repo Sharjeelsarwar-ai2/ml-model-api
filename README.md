@@ -12,11 +12,14 @@ Dataset → Train → Saved model → REST API → Live requests
 
 - `POST /predict` — send `{"text": "..."}` and get back
   `{"label": "positive", "score": 0.94}` (score = probability of the predicted label)
+- `GET /demo` — one demo page with two tabs: **Text sentiment** (type a
+  sentence, get a label + confidence + plain-words feeling) and **Face emotion**
+  (camera or photo upload, 7 expressions — happy, sad, angry, scared,
+  disgusted, surprised, neutral — 100% client-side with face-api.js, nothing
+  is sent to the server). Tab state lives in the URL hash: `/demo#text` and
+  `/demo#face` link straight to each tool.
+- `GET /face` — redirects to `/demo#face`, so the old face link still works.
 - `GET /` opens the demo page in a browser (it redirects to `/demo`)
-- `GET /health`, `POST /predict/batch` — health check, batch predictions
-- `GET /face` — face emotion detection in the browser: camera or photo upload,
-  7 expressions (happy, sad, angry, scared, disgusted, surprised, neutral),
-  100% client-side with face-api.js — nothing is sent to the server
 
 ## The model
 
@@ -40,8 +43,10 @@ python train.py
 uvicorn app:app --reload
 ```
 
-Open http://127.0.0.1:8000/demo to try it in your browser,
-or http://127.0.0.1:8000/docs for the interactive API docs.
+Open http://127.0.0.1:8000/demo to try it in your browser — the Text sentiment
+tab is the default; the Face emotion tab is at http://127.0.0.1:8000/demo#face
+(the face models load only when that tab is first opened).
+Or open http://127.0.0.1:8000/docs for the interactive API docs.
 
 ## Try it with curl
 
@@ -78,7 +83,7 @@ curl -X POST http://127.0.0.1:8000/predict \
 
 ```bash
 uvicorn app:app --port 8000 &
-python test_api.py   # 8 checks: health, positive, negative, empty 400, batch, /demo, /
+python test_api.py   # 9 checks: health, positive, negative, empty 400, missing/empty 400/422, batch, /demo, /face 307, / 307
 ```
 
 ## Deploy — Render
@@ -130,7 +135,7 @@ The same code also deploys to Vercel — no Dockerfile, no extra service:
 ```
 ml-model-api/
 ├── train.py                  # trains TF-IDF + LogisticRegression on the UCI dataset
-├── app.py                    # FastAPI app: /, /health, /predict, /predict/batch, /demo, /face
+├── app.py                    # FastAPI app: /, /health, /predict, /predict/batch, /demo (text + face tabs); /face redirects to /demo#face
 ├── api/
 │   └── index.py              # Vercel entrypoint: FastAPI app wrapped with Mangum
 ├── vercel.json               # routes all paths to /api/index.py on Vercel
@@ -143,8 +148,9 @@ ml-model-api/
 ├── data/
 │   └── sentiment_labelled_sentences.zip  # UCI dataset (downloaded by train.py; not committed)
 └── shots/
-    ├── demo-desktop.png      # /demo verified at 1280px (local only)
-    └── demo-mobile.png       # /demo verified at 390px (local only)
+    ├── merged-desktop.png    # merged /demo (text tab) verified at 1280px
+    ├── merged-face-desktop.png  # merged /demo (face tab) verified at 1280px
+    └── merged-mobile.png     # merged /demo verified at 390px (local only)
 ```
 
 ## Why no Docker / no PyTorch?
