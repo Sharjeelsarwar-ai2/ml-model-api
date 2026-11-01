@@ -1,9 +1,13 @@
 """
 train.py — Train a binary sentiment classifier and save it as one joblib file.
 
-Dataset: UCI Sentiment Labelled Sentences
-(https://archive.ics.uci.edu/dataset/331/sentiment+labelled+sentences)
-3,000 labelled sentences from Amazon, IMDb and Yelp reviews (1 = positive, 0 = negative).
+Dataset: data/train_sentences.csv (13,000 labelled sentences, UTF-8, built by
+build_dataset.py and committed to the repo — no download at train/deploy time):
+  - UCI Sentiment Labelled Sentences (3,000 Amazon/IMDb/Yelp reviews,
+    1,500 positive / 1,500 negative)
+  - Sentiment140 tweets, balanced sample (10,000 tweets,
+    5,000 positive / 5,000 negative) — social-media style language the
+    review-only dataset never sees ("yay", "passed my exam", "got the job").
 
 Model: TF-IDF (max 5,000 features) + Logistic Regression.
 No PyTorch, no Docker — plain scikit-learn, light enough for any laptop.
@@ -14,10 +18,8 @@ Output:
     model/sentiment_model.joblib   (dict: {"vectorizer": ..., "model": ..., "meta": {...}})
 """
 
-import io
+import csv
 import os
-import urllib.request
-import zipfile
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -25,34 +27,26 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
-DATASET_URL = "https://archive.ics.uci.edu/static/public/331/sentiment+labelled+sentences.zip"
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model", "sentiment_model.joblib")
-FILES = ["amazon_cells_labelled.txt", "imdb_labelled.txt", "yelp_labelled.txt"]
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA_CSV = os.path.join(HERE, "data", "train_sentences.csv")
+MODEL_PATH = os.path.join(HERE, "model", "sentiment_model.joblib")
 
 
 def load_data() -> tuple[list[str], list[int]]:
-    """Download the UCI zip (once) and parse the three labelled files."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    zip_path = os.path.join(DATA_DIR, "sentiment_labelled_sentences.zip")
-    if not os.path.exists(zip_path):
-        print(f"Downloading dataset from {DATASET_URL} ...")
-        urllib.request.urlretrieve(DATASET_URL, zip_path)
-        print("Download complete.")
-
+    """Read the committed training CSV (text,label). No download needed."""
+    if not os.path.exists(DATA_CSV):
+        raise SystemExit(
+            f"Training data not found at {DATA_CSV}. Run `python build_dataset.py` first."
+        )
     texts, labels = [], []
-    with zipfile.ZipFile(zip_path) as zf:
-        for fname in FILES:
-            member = f"sentiment labelled sentences/{fname}"
-            with zf.open(member) as fh:
-                for line in io.TextIOWrapper(fh, encoding="utf-8"):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Format: "<sentence>\t<0|1>"
-                    text, label = line.rsplit("\t", 1)
-                    texts.append(text)
-                    labels.append(int(label))
+    with open(DATA_CSV, encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            text = (row.get("text") or "").strip()
+            if not text:
+                continue
+            texts.append(text)
+            labels.append(int(row["label"]))
     return texts, labels
 
 
@@ -83,7 +77,8 @@ def main() -> None:
             "vectorizer": vectorizer,
             "model": model,
             "meta": {
-                "dataset": "UCI Sentiment Labelled Sentences (amazon + imdb + yelp, 3000 rows)",
+                "dataset": "UCI Sentiment Labelled Sentences (3,000 reviews) + "
+                           "Sentiment140 sample (10,000 tweets), 13,000 rows total",
                 "test_accuracy": round(float(acc), 4),
                 "vectorizer": "TF-IDF, max_features=5000, ngram_range=(1,2), stop_words=english",
                 "model": "LogisticRegression(max_iter=1000, C=1.0)",

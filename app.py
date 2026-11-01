@@ -206,6 +206,11 @@ DEMO_HTML = """<!DOCTYPE html>
     overflow: hidden; min-height: 220px; display: flex; align-items: center; justify-content: center;
   }
   .stage video, .stage img { display: block; max-width: 100%; height: auto; max-height: 480px; }
+  /* The front camera shows a mirror image (like the phone's camera app), so the
+     video is flipped horizontally. The overlay canvas is NOT flipped — the
+     detection boxes are mirrored in JS instead (see mirrorDet), so box and
+     video stay aligned. Photos are never mirrored. */
+  .stage video.mirrored { transform: scaleX(-1); }
   .media { position: relative; line-height: 0; }
   .media canvas { position: absolute; left: 0; top: 0; }
   .stage .hint { color: #F8BBD0; font-size: 14px; padding: 40px 20px; text-align: center; line-height: 1.6; }
@@ -253,7 +258,9 @@ DEMO_HTML = """<!DOCTYPE html>
     <h1>ML Model as an API<br><span>Sentiment Classifier</span></h1>
     <p class="sub">One page, two tools. <b style="color:var(--ink)">Text sentiment</b> predicts whether a sentence is
       <b style="color:var(--ink)">positive</b> or <b style="color:var(--ink)">negative</b> through
-      <code>POST /predict</code> — trained on 3,000 real Amazon, IMDb &amp; Yelp reviews.
+      <code>POST /predict</code> — trained on 3,000 real Amazon, IMDb &amp; Yelp reviews
+      plus 10,000 tweets, so it also understands everyday happy news
+      (“I passed my course, yay!”) — not just review language.
       <b style="color:var(--ink)">Face emotion</b> reads expressions from your camera or a photo,
       entirely in your browser.</p>
 
@@ -314,7 +321,7 @@ DEMO_HTML = """<!DOCTYPE html>
       <div class="error" id="faceError"></div>
     </div>
 
-    <footer>Powered by <code>POST /predict</code> &middot; Model accuracy 0.81 on held-out reviews<br>
+    <footer>Powered by <code>POST /predict</code> &middot; Model accuracy 0.74 on held-out sentences<br>
       <a href="/docs">API docs</a> &middot; <a href="/health">Health check</a></footer>
   </div>
   <script>
@@ -412,16 +419,62 @@ DEMO_HTML = """<!DOCTYPE html>
       return new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
     }
 
+    // Mirror a detection horizontally for the camera preview: the front
+    // camera video is flipped with scaleX(-1), so a box at x must be drawn
+    // at x' = width - x - boxWidth (and every landmark x' = width - x) to
+    // stay on the face. Photos are never mirrored — this is only used when
+    // mode === 'camera'.
+    // The mirrored object must keep the ORIGINAL's shape and prototypes:
+    // face-api.js's draw helpers duck-type their input, and a plain
+    // {detection, landmarks} object makes drawDetections throw
+    // ("Box.constructor - expected box to be IBoundingBox | IRect").
+    // So we clone each level, replacing only the box / positions.
+    function cloneWith(obj, patch) {
+      // Object.assign cannot override a getter-only prototype property
+      // (FaceLandmarks68.positions is one), so copy descriptors and define
+      // the patched keys as plain data properties that shadow the getters.
+      var c = Object.create(Object.getPrototypeOf(obj));
+      Object.keys(obj).forEach(function (k) {
+        if (!(k in patch)) {
+          Object.defineProperty(c, k, Object.getOwnPropertyDescriptor(obj, k));
+        }
+      });
+      Object.keys(patch).forEach(function (k) {
+        Object.defineProperty(c, k, { value: patch[k], writable: true,
+                                      enumerable: true, configurable: true });
+      });
+      return c;
+    }
+
+    function mirrorDet(det, width) {
+      var box = det.detection.box;
+      var mBox = new faceapi.Box({ x: width - box.x - box.width, y: box.y,
+                                   width: box.width, height: box.height });
+      var mLandmarks = cloneWith(det.landmarks, {
+        positions: det.landmarks.positions.map(function (p) {
+          return new faceapi.Point(width - p.x, p.y);
+        })
+      });
+      var mDetection = cloneWith(det.detection, { box: mBox });
+      return cloneWith(det, { detection: mDetection, landmarks: mLandmarks });
+    }
+
     function drawDetections(source, det) {
       var displaySize = { width: source.clientWidth, height: source.clientHeight };
       faceapi.matchDimensions(overlay, displaySize);
       var resized = faceapi.resizeResults(det, displaySize);
+      var mirrored = (mode === 'camera');
+      var shown = mirrored ? mirrorDet(resized, displaySize.width) : resized;
       overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
-      faceapi.draw.drawDetections(overlay, resized);
-      faceapi.draw.drawFaceLandmarks(overlay, resized);
+      faceapi.draw.drawDetections(overlay, shown);
+      faceapi.draw.drawFaceLandmarks(overlay, shown);
       var top = topExpression(det.expressions);
       var label = EMOTIONS[top.key] + ' ' + Math.round(top.value * 100) + '%';
-      new faceapi.draw.DrawTextField([label], resized.detection.box.topLeft).draw(overlay);
+      var anchor = mirrored
+        ? new faceapi.Point(displaySize.width - resized.detection.box.x - resized.detection.box.width,
+                            resized.detection.box.y)
+        : resized.detection.box.topLeft;
+      new faceapi.draw.DrawTextField([label], anchor).draw(overlay);
     }
 
     function topExpression(expressions) {
@@ -499,6 +552,7 @@ DEMO_HTML = """<!DOCTYPE html>
       video.srcObject = stream;
       await video.play();
       video.style.display = 'block';
+      video.classList.add('mirrored'); // front camera: mirror like the phone's camera app
       stageHint.style.display = 'none';
       mode = 'camera';
       startBtn.disabled = true;
@@ -514,6 +568,7 @@ DEMO_HTML = """<!DOCTYPE html>
       video.pause();
       video.srcObject = null;
       video.style.display = 'none';
+      video.classList.remove('mirrored');
       mode = null;
       startBtn.disabled = !modelsReady;
       stopBtn.disabled = true;
