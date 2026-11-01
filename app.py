@@ -180,6 +180,7 @@ DEMO_HTML = """<!DOCTYPE html>
   .meter > div { height: 100%; border-radius: 999px; width: 0; transition: width .5s ease; }
   .meter.positive > div { background: linear-gradient(90deg, var(--magenta), var(--rose)); }
   .meter.negative > div { background: linear-gradient(90deg, #8A5A6B, var(--plum)); }
+  .feeling { margin-top: 14px; font-size: 15px; line-height: 1.55; color: var(--ink); }
   .raw { margin-top: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--muted); word-break: break-word; }
   .error {
     display: none; margin-top: 20px; padding: 14px 16px; border-radius: 14px;
@@ -221,6 +222,7 @@ DEMO_HTML = """<!DOCTYPE html>
           <span class="pill" id="pill">positive</span>
           <div class="meter-label"><span>Confidence</span><b id="score">0.94</b></div>
           <div class="meter" id="meter"><div></div></div>
+          <p class="feeling" id="feeling"></p>
           <p class="raw" id="raw"></p>
         </div>
       </div>
@@ -238,7 +240,22 @@ DEMO_HTML = """<!DOCTYPE html>
     const scoreEl = document.getElementById('score');
     const meter = document.getElementById('meter');
     const raw = document.getElementById('raw');
+    const feeling = document.getElementById('feeling');
     const err = document.getElementById('error');
+
+    // Plain-words reading of the binary result (label + confidence).
+    // The model only predicts positive/negative — this line just says
+    // what that means in human terms; it is not emotion detection.
+    function feelingFor(label, score) {
+      if (label === 'positive') {
+        if (score >= 0.8) return '\\uD83D\\uDE0A Happy \\u2014 this sounds genuinely pleased and positive.';
+        if (score >= 0.6) return '\\uD83D\\uDE42 Pleased \\u2014 leaning positive, in a good mood.';
+        return '\\uD83E\\uDD14 A little pleased \\u2014 slightly positive, with mixed feelings.';
+      }
+      if (score >= 0.8) return '\\uD83D\\uDC94 Hurting \\u2014 this sounds clearly upset or unhappy.';
+      if (score >= 0.6) return '\\uD83D\\uDE14 Down \\u2014 leaning negative, like something is bothering them.';
+      return '\\uD83D\\uDE15 A bit down \\u2014 slightly negative, with mixed feelings.';
+    }
 
     document.querySelectorAll('.chip').forEach(c =>
       c.addEventListener('click', () => { box.value = c.dataset.t; box.focus(); run(); }));
@@ -265,6 +282,7 @@ DEMO_HTML = """<!DOCTYPE html>
         scoreEl.textContent = data.score.toFixed(2);
         meter.className = 'meter ' + data.label;
         meter.firstElementChild.style.width = Math.round(data.score * 100) + '%';
+        feeling.textContent = feelingFor(data.label, data.score);
         raw.textContent = 'POST /predict \\u2192 ' + JSON.stringify(data);
         result.classList.add('show');
       } catch (e) {
