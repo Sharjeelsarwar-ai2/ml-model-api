@@ -198,6 +198,7 @@ story.append(data_table(
         ["POST /predict", "Classify one sentence", '{ "label": "positive", "score": 0.896 }'],
         ["POST /predict/batch", "Classify up to 100 texts", "Returns a list of predictions"],
         ["GET /demo", "In-browser demo page", "Type a sentence, get a result card"],
+        ["GET /face", "Face emotion detection page", "Camera or photo, 7 expressions, in-browser"],
         ["GET /docs", "Interactive API docs", "FastAPI's built-in Swagger UI"],
     ]))
 story.append(Spacer(1, 2 * mm))
@@ -271,6 +272,74 @@ story.append(Paragraph(
     "so every request is fast. Vercel is serverless — cold starts reload the model (small at 0.23 MB, "
     "about a second) — but it keeps everything in one place he already uses.", S_BODY))
 
+story.append(Paragraph("Step 9 — Face emotion detection (GET /face)", S_H1))
+story.append(Paragraph(
+    "<b>What was added.</b> A second demo page, <font face='Courier' size='10'>GET /face</font>, in the same "
+    "app and the same pink/rose identity as <font face='Courier' size='10'>/demo</font>. It reads facial "
+    "expressions two ways: a <b>live camera</b> (Start/Stop buttons, front camera via "
+    "<font face='Courier' size='10'>getUserMedia</font> with <font face='Courier' size='10'>facingMode: \"user\"</font>, "
+    "face box + top-expression label drawn live on a canvas overlay) and a <b>photo upload</b> (pick a photo "
+    "from the gallery, same detection on the still image). The result shows the top emotion big with its "
+    "emoji and a confidence bar, plus all 7 expression scores listed underneath. The two demo pages link "
+    "to each other (“Try face emotion &rarr;” / “&larr; Back to text demo”).", S_BODY))
+story.append(Paragraph(
+    "<b>How it works.</b> Detection runs <b>100% in the browser</b> with "
+    "<font face='Courier' size='10'>face-api.js</font> — the maintained fork "
+    "<font face='Courier' size='10'>@vladmandic/face-api</font>, pinned version <b>1.7.15</b>. The page loads the "
+    "library and three models from the jsDelivr CDN:", S_BODY))
+story.append(code_block([
+    "Library:  https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js",
+    "Models:   https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model/",
+    "  tiny_face_detector_model  (finds the face box)",
+    "  face_landmark_68_model    (68 facial landmarks — expressions need these)",
+    "  face_expression_model     (scores the 7 expressions)",
+]))
+story.append(Spacer(1, 2 * mm))
+story.append(Paragraph(
+    "The seven expressions and how they are shown:", S_BODY))
+story.append(data_table(
+    ["Model output", "Shown on the page as", ""],
+    [
+        ["happy", "Happy", ""],
+        ["sad", "Sad / Hurting", ""],
+        ["angry", "Angry", ""],
+        ["fearful", "Scared", ""],
+        ["disgusted", "Disgusted", ""],
+        ["surprised", "Surprised", ""],
+        ["neutral", "Neutral", ""],
+    ]))
+story.append(Spacer(1, 2 * mm))
+story.append(Paragraph(
+    "<b>Why it runs in the browser.</b> The Render free server cannot run a face model — it is a small "
+    "Python service with no GPU and no camera. Doing detection client-side also means <b>camera frames "
+    "and photos never leave the user's device</b>: nothing is uploaded, nothing is sent to the server, "
+    "and no image is ever stored. The TensorFlow.js backend is WebGL when the device supports it, "
+    "with an automatic fallback to CPU.", S_BODY))
+story.append(Paragraph(
+    "<b>Graceful failures.</b> Camera permission denied or no camera on the device shows a clear inline "
+    "message and points to photo upload instead; a photo with no face says so plainly; if the library or "
+    "the models fail to load from the CDN, the page shows an inline error instead of a blank page. The "
+    "page renders immediately even on a slow connection (the CDN script is deferred).", S_BODY))
+story.append(Paragraph(
+    "<b>Honest limits.</b> The model detects the 7 standard expressions only. “Hurting” is <b>not</b> a "
+    "separate class — it is shown as <b>Sad / Hurting</b>, i.e. the model's <i>sad</i> score read in plain "
+    "words, exactly like the feeling line on the text demo. A smile scores as happy; a frown or tears "
+    "score as sad. The expressions are a reading of the face, not a diagnosis of how someone feels.", S_BODY))
+story.append(Paragraph(
+    "<b>What was verified (and what was not).</b> <font face='Courier' size='10'>GET /face</font> returns 200 locally; "
+    "the library script, all three model manifests and all three model weight files return HTTP 200 "
+    "(checked with curl). Detection was run end-to-end in a headless browser on a real public-domain "
+    "smiling portrait (Wikimedia Commons): top emotion <b>Happy, score 1.00</b>, all 7 scores listed, face "
+    "box + landmarks drawn on the overlay (verified geometrically: the canvas exactly matches the displayed "
+    "photo size, box inside the bounds). Layout is clean at desktop 1280px and mobile 390px (0 px horizontal "
+    "overflow), 0 console errors. The camera-denied path was exercised and shows its message correctly. "
+    "<b>Not verified:</b> the live camera on a real phone — headless Firefox has no camera, so that path "
+    "still needs a real-phone check. Also note: the sandbox's headless Firefox could not fetch jsDelivr "
+    "directly (its requests hang), so the in-browser detection test used byte-identical local copies of the "
+    "same pinned files; the shipped page still loads everything from the CDN, where every URL was verified "
+    "HTTP 200. On the headless test machine TensorFlow.js fell back to the CPU backend (no WebGL there); "
+    "on a real phone it will use WebGL.", S_BODY))
+
 # ---- How to run + file list ----
 story.append(Paragraph("How to run it locally", S_H1))
 story.append(code_block([
@@ -285,12 +354,14 @@ story.append(data_table(
     ["File", "What it is", "Size / notes"],
     [
         ["train.py", "Trains TF-IDF + LogisticRegression", "Downloads UCI data, prints accuracy"],
-        ["app.py", "FastAPI app + polished /demo page", "6 endpoints, loads model once"],
+        ["app.py", "FastAPI app + /demo and /face pages", "7 endpoints incl. /face, loads model once"],
         ["api/index.py", "Vercel entrypoint (Mangum wrapper)", "No change to app.py needed"],
         ["vercel.json", "Routes all paths to /api/index.py", "Vercel only"],
         ["requirements.txt", "fastapi, uvicorn, scikit-learn, joblib, pydantic, mangum", "Pinned versions"],
         ["test_api.py", "8 smoke tests (health, predict, batch, demo)", "8/8 passed"],
         ["README.md", "Setup, curl examples, Render + Vercel deploys", "—"],
+        ["shots/face-desktop.png", "GET /face verified at 1280px", "Happy 1.00, box on face"],
+        ["shots/face-mobile.png", "GET /face verified at 390px", "0 px overflow"],
         ["model/sentiment_model.joblib", "Trained vectorizer + model", "0.23 MB"],
         ["data/sentiment_labelled_sentences.zip", "UCI dataset (downloaded by train.py)", "~85 KB"],
         ["ML_Model_API_Build_Report.pdf", "This report", "—"],

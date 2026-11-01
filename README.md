@@ -14,6 +14,9 @@ Dataset → Train → Saved model → REST API → Live requests
   `{"label": "positive", "score": 0.94}` (score = probability of the predicted label)
 - `GET /` opens the demo page in a browser (it redirects to `/demo`)
 - `GET /health`, `POST /predict/batch` — health check, batch predictions
+- `GET /face` — face emotion detection in the browser: camera or photo upload,
+  7 expressions (happy, sad, angry, scared, disgusted, surprised, neutral),
+  100% client-side with face-api.js — nothing is sent to the server
 
 ## The model
 
@@ -127,7 +130,7 @@ The same code also deploys to Vercel — no Dockerfile, no extra service:
 ```
 ml-model-api/
 ├── train.py                  # trains TF-IDF + LogisticRegression on the UCI dataset
-├── app.py                    # FastAPI app: /, /health, /predict, /predict/batch, /demo
+├── app.py                    # FastAPI app: /, /health, /predict, /predict/batch, /demo, /face
 ├── api/
 │   └── index.py              # Vercel entrypoint: FastAPI app wrapped with Mangum
 ├── vercel.json               # routes all paths to /api/index.py on Vercel
