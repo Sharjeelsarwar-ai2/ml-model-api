@@ -25,23 +25,29 @@ Dataset → Train → Saved model → REST API → Live requests
 
 ## The model
 
-- **Dataset:** 13,000 labelled sentences — UCI Sentiment Labelled Sentences
+- **Dataset:** 103,000 labelled sentences — UCI Sentiment Labelled Sentences
   (3,000 Amazon/IMDb/Yelp reviews, 1,500 positive / 1,500 negative) **plus**
-  a balanced sample of Sentiment140 tweets (10,000 tweets, 5,000 positive /
-  5,000 negative). The review-only model misclassified everyday happy news
+  a balanced sample of Sentiment140 tweets (100,000 tweets, 50,000 positive /
+  50,000 negative). The review-only model misclassified everyday happy news
   ("I passed my course as top performer yay" → negative 0.56), because
   achievement / life-update language never appears in product reviews — the
   tweets fix that distribution gap. The sampled sentences live in
-  `data/train_sentences.csv` (0.87 MB, committed to the repo); see
-  `build_dataset.py` for how it was built.
-- **Model:** TF-IDF (max 5,000 features, 1–2 grams) + Logistic Regression.
-- **Test accuracy: 0.7431** (20% held-out split, 2,600 sentences). Lower than
-  the old review-only 0.8083 — but the old number was measured on clean
-  reviews only. On the same held-out reviews the new model still scores
-  0.7997; tweets are simply noisier (0.7261 on held-out tweets), and the
-  combined test set now includes them. The model did not get worse at
-  reviews; the test got harder and more realistic.
-- **Model file:** `model/sentiment_model.joblib` — 0.22 MB. Small on purpose, so it
+  `data/train_sentences_part1–4.csv` (6.91 MB, committed to the repo); see
+  `build_dataset.py` for how it was built. A fixed 2,000-sentence eval set
+  lives in `data/eval_sentences.csv` (seed 123) — it is held out of training
+  so accuracy numbers stay comparable (see the build report, Step 11).
+- **Model:** word TF-IDF (10,000 features, 1–2 grams) **plus** char TF-IDF
+  (10,000 features, 3–5 character grams) combined, + Logistic Regression
+  (C=2.0). The character features catch slang, stretched words ("looove",
+  "sooo") and typos that word features miss — they are what fixed the
+  "Why this always happens to me" regression (see Step 11).
+- **Test accuracy: 0.8020** on the fixed 2,000-sentence eval set (1,000
+  positive / 1,000 negative). Per-source: reviews 0.8172, tweets 0.7975.
+  The old review-only model scored 0.8083, but that was measured on clean
+  reviews only; the new number is measured on a harder, more realistic mix
+  (see the build report, Step 11 for the full error analysis and the 24
+  candidate configurations that were compared).
+- **Model file:** `model/sentiment_model.joblib` — 0.83 MB. Small on purpose, so it
   loads in under a second and fits in a serverless bundle.
 
 ## Run locally
@@ -50,7 +56,7 @@ Dataset → Train → Saved model → REST API → Live requests
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Train the model (reads data/train_sentences.csv — no download needed)
+# 2. Train the model (reads data/train_sentences_part1–4.csv — no download needed)
 python train.py
 
 # 3. Start the API
@@ -73,19 +79,19 @@ curl http://127.0.0.1:8000/health
 curl -X POST http://127.0.0.1:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"text": "I absolutely loved this movie, it was fantastic and wonderful!"}'
-# {"label":"positive","score":0.8818}
+# {"label":"positive","score":0.9680}
 
 # Negative
 curl -X POST http://127.0.0.1:8000/predict \
   -H "Content-Type: application/json" \
   -d '{"text": "This was terrible, a complete waste of time, I hated every minute of it."}'
-# {"label":"negative","score":0.9235}
+# {"label":"negative","score":0.9257}
 
 # Batch
 curl -X POST http://127.0.0.1:8000/predict/batch \
   -H "Content-Type: application/json" \
   -d '{"texts": ["Great product, highly recommended!", "Awful experience, never again."]}'
-# [{"label":"positive","score":0.8126},{"label":"negative","score":0.8485}]
+# [{"label":"positive","score":0.9446},{"label":"negative","score":0.9545}]
 
 # Empty text is rejected with a 400
 curl -X POST http://127.0.0.1:8000/predict \
@@ -112,7 +118,7 @@ No Docker needed — Render runs it as a native Python web service:
 6. Free tier works fine for this project.
 
 The model is trained during the build (`train.py` reads the committed
-`data/train_sentences.csv` — no download at build time — and saves
+`data/train_sentences_part1–4.csv` — no download at build time — and saves
 `model/sentiment_model.joblib`), so the trained model file itself is not
 committed to the repo — it is a build artifact, regenerated on every deploy.
 
@@ -140,7 +146,7 @@ The same code also deploys to Vercel — no Dockerfile, no extra service:
 - **Render:** a persistent server — the model loads once at startup and stays
   loaded, so every request is fast. The simpler home for an always-on API.
 - **Vercel:** serverless functions — the first request after a while idle is a
-  **cold start** that reloads the model (small — 0.22 MB — so this takes about
+  **cold start** that reloads the model (small — 0.83 MB — so this takes about
   a second). Convenient because everything you already deploy (portfolio,
   twin, Studient) lives there in one place.
 
@@ -148,8 +154,8 @@ The same code also deploys to Vercel — no Dockerfile, no extra service:
 
 ```
 ml-model-api/
-├── train.py                  # trains TF-IDF + LogisticRegression on data/train_sentences.csv
-├── build_dataset.py          # builds data/train_sentences.csv (UCI reviews + Sentiment140 sample)
+├── train.py                  # trains word+char TF-IDF + LogisticRegression on data/train_sentences_part1–4.csv
+├── build_dataset.py          # builds data/train_sentences_part1–4.csv (UCI reviews + Sentiment140 sample)
 ├── app.py                    # FastAPI app: /, /health, /predict, /predict/batch, /demo (text + face tabs); /face redirects to /demo#face
 ├── api/
 │   └── index.py              # Vercel entrypoint: FastAPI app wrapped with Mangum
@@ -159,9 +165,10 @@ ml-model-api/
 ├── README.md
 ├── ML_Model_API_Build_Report.pdf  # build report (local copy; not committed)
 ├── model/
-│   └── sentiment_model.joblib  # trained model (created by train.py, 0.22 MB; built at deploy time, not committed)
+│   └── sentiment_model.joblib  # trained model (created by train.py, 0.83 MB; built at deploy time, not committed)
 ├── data/
-│   ├── train_sentences.csv   # 13,000 labelled sentences (UCI + Sentiment140) — committed, read by train.py
+│   ├── train_sentences.csv   # 103,000 labelled sentences (UCI + Sentiment140) — committed, read by train.py
+│   ├── eval_sentences.csv    # fixed 2,000-sentence eval set (seed 123) — committed, held out of training
 │   └── sentiment_labelled_sentences.zip  # UCI dataset (used by build_dataset.py; not committed)
 └── shots/
     ├── merged-desktop.png    # merged /demo (text tab) verified at 1280px
@@ -174,6 +181,6 @@ ml-model-api/
 - **Docker:** Docker Desktop on Windows needs installation and eats RAM.
   Nothing here needs a container — `uvicorn` runs it locally, Render runs
   native Python, and Vercel runs serverless Python.
-- **PyTorch:** far too heavy for a small text classifier. TF-IDF +
-  Logistic Regression reaches 0.74 accuracy on the broader dataset
-  (reviews + tweets), trains in seconds, and the saved model is 0.22 MB.
+- **PyTorch:** far too heavy for a small text classifier. Word + char
+  TF-IDF + Logistic Regression reaches 0.80 accuracy on the broader dataset
+  (reviews + tweets), trains in ~30 seconds, and the saved model is 0.83 MB.

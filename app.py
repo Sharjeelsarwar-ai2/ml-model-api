@@ -321,7 +321,7 @@ DEMO_HTML = """<!DOCTYPE html>
       <div class="error" id="faceError"></div>
     </div>
 
-    <footer>Powered by <code>POST /predict</code> &middot; Model accuracy 0.74 on held-out sentences<br>
+    <footer>Powered by <code>POST /predict</code> &middot; Model accuracy 0.80 on held-out sentences<br>
       <a href="/docs">API docs</a> &middot; <a href="/health">Health check</a></footer>
   </div>
   <script>
