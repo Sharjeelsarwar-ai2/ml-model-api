@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 
 import joblib
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -78,19 +78,9 @@ def predict_one(text: str) -> Prediction:
 
 @app.get("/")
 def root():
-    meta = ARTIFACTS.get("meta", {})
-    return {
-        "project": "ML Model as an API — Sentiment Classifier",
-        "model": meta.get("model", "TF-IDF + LogisticRegression"),
-        "dataset": meta.get("dataset", "UCI Sentiment Labelled Sentences"),
-        "test_accuracy": meta.get("test_accuracy"),
-        "endpoints": {
-            "GET /health": "health check",
-            "POST /predict": '{"text": "..."} -> {"label": "positive", "score": 0.94}',
-            "POST /predict/batch": '{"texts": ["...", "..."]}',
-            "GET /demo": "try it in your browser",
-        },
-    }
+    # Opening the bare URL in a browser should show the demo page,
+    # not a wall of JSON — API clients can use /health, /predict and /docs.
+    return RedirectResponse(url="/demo", status_code=307)
 
 
 @app.get("/health")

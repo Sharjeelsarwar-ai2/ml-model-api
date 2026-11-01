@@ -12,8 +12,8 @@ Dataset → Train → Saved model → REST API → Live requests
 
 - `POST /predict` — send `{"text": "..."}` and get back
   `{"label": "positive", "score": 0.94}` (score = probability of the predicted label)
-- `GET /demo` — a polished page in the browser to try it with no tools at all
-- `GET /health`, `POST /predict/batch`, `GET /` — health check, batch predictions, info
+- `GET /` opens the demo page in a browser (it redirects to `/demo`)
+- `GET /health`, `POST /predict/batch` — health check, batch predictions
 
 ## The model
 
